@@ -1,41 +1,23 @@
 # domain/refresh_job.py
 
-import os
-from domain.exceptions import RefreshJobError
+from domain.exceptions import RefreshJobError, ExcelGatewayError
+
 
 class RefreshJob:
     """
-    Representa la operación principal: refrescar un archivo Excel.
-    Aquí va la lógica del negocio sin depender de infraestructura.
+    Representa un trabajo de refresh de un archivo Excel.
+    Encapsula la lógica de ejecución contra el gateway de Excel.
     """
 
     def __init__(self, excel_path: str):
         self.excel_path = excel_path
 
-    def validate_path(self):
-        """
-        Valida la ruta del archivo Excel.
-        No importa si está en:
-        - PC local (C:/...)
-        - Red (\\NAS\Carpeta\...)
-        - Nube sincronizada (OneDrive, Drive)
-        """
-        if not os.path.exists(self.excel_path):
-            raise RefreshJobError(f"El archivo no existe: {self.excel_path}")
-
     def execute(self, excel_gateway):
         """
-        Ejecuta la lógica del refresh usando un gateway externo.
-        NOTA: el dominio no sabe cómo se abre Excel, solo orquesta.
+        Ejecuta el refresh usando el gateway.
+        Lanza RefreshJobError si algo falla.
         """
-
-        # 1. Validar ruta
-        self.validate_path()
-
-        # 2. Solicitar refresh al servicio de infraestructura
-        result = excel_gateway.refresh_file(self.excel_path)
-
-        # 3. Puedes agregar más lógica aquí
-        #    ejemplo: validaciones de negocio, timestamp, etc.
-
-        return result
+        try:
+            return excel_gateway.refresh_file(self.excel_path)
+        except ExcelGatewayError as e:
+            raise RefreshJobError(str(e))

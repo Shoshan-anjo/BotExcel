@@ -10,12 +10,14 @@ from domain.exceptions import ExcelGatewayError
 
 class ExcelGateway:
     """
-    Gateway que controla Excel mediante COM.
-    Incluye:
-    - RefreshAll con reintentos
-    - Espera robusta del cálculo
-    - Validación del archivo
-    - Detección avanzada de archivos bloqueados
+    Maneja Excel mediante COM.
+
+    Características:
+    - RefreshAll repetido según variable de entorno
+    - Reintentos automáticos
+    - Detección de archivo bloqueado
+    - Espera robusta del cálculo (PowerQuery / Fórmulas)
+    - Validación del archivo actualizado
     """
 
     def __init__(self, logger, config):
@@ -27,18 +29,17 @@ class ExcelGateway:
         self.min_rows_expected = int(config.get("MIN_ROWS_EXPECTED", 1))
         self.validate_rows = str(config.get("VALIDATE_ROWS_AFTER_REFRESH", "true")).lower() == "true"
 
+        # 🔥 Número de veces que se realizará el refresh
+        self.refresh_repeat = int(config.get("REFRESH_REPEAT_COUNT", 1))
+
     # ======================================================
-    # DETECCIÓN ROBUSTA DE ARCHIVO BLOQUEADO
+    # DETECCIÓN DEL ARCHIVO BLOQUEADO
     # ======================================================
     def file_is_locked(self, path):
-        """
-        Detecta si un archivo está bloqueado por Excel, OneDrive, PowerQuery o cualquier proceso.
-        """
         if not os.path.exists(path):
             raise ExcelGatewayError(f"El archivo no existe: {path}")
 
         try:
-            # Intento de abrir en modo lectura/escritura exclusivo
             stream = open(path, "r+b")
             stream.close()
             return False
@@ -46,7 +47,7 @@ class ExcelGateway:
             return True
 
     # ======================================================
-    # REFRESH COMPLETO (con reintentos)
+    # EJECUTAR REFRESH COMPLETO CON REFRESH REPETIDO
     # ======================================================
     def refresh_file(self, excel_path):
         self.logger.info(f"Iniciando refresh del archivo: {excel_path}")
@@ -68,30 +69,31 @@ class ExcelGateway:
 
                 wb = excel.Workbooks.Open(excel_path)
 
-                t_start_refresh = time.time()
-                self.logger.info("Ejecutando RefreshAll()...")
+                # ============================================================
+                # 🔥 Refresh repetido según REFRESH_REPEAT_COUNT
+                # ============================================================
+                for i in range(self.refresh_repeat):
+                    self.logger.info(f"Ejecutando RefreshAll() (ronda {i+1}/{self.refresh_repeat})...")
 
-                wb.RefreshAll()
-                self._wait_for_refresh(excel)   # <-- método mejorado
+                    t0 = time.time()
+                    wb.RefreshAll()
+                    self._wait_for_refresh(excel)
+                    t1 = time.time()
 
-                t_end_refresh = time.time()
+                    self.logger.info(f"Ronda {i+1} completada en {round(t1 - t0, 2)} segundos.")
 
-                self.logger.info(
-                    f"Refresh completado en {round(t_end_refresh - t_start_refresh, 2)} segundos."
-                )
-
+                # Guardar cambios
                 wb.Save()
                 wb.Close()
                 excel.Quit()
 
-                # Validación post-refresh
+                # Validación final
                 if self.validate_rows:
                     self._validate_excel_after_refresh(excel_path)
 
                 return {
                     "status": "ok",
                     "message": "Archivo actualizado correctamente",
-                    "refresh_time": round(t_end_refresh - t_start_refresh, 2)
                 }
 
             except Exception as e:
@@ -102,62 +104,50 @@ class ExcelGateway:
                         f"Fallaron todos los intentos de refresh. Último error: {str(e)}"
                     )
 
-                self.logger.info(
-                    f"Esperando {self.retry_interval} segundos antes del próximo intento..."
-                )
+                self.logger.info(f"Esperando {self.retry_interval} segundos antes del próximo intento...")
                 time.sleep(self.retry_interval)
 
             finally:
-                pythoncom.CoUninitialize()
+                try:
+                    pythoncom.CoUninitialize()
+                except:
+                    pass
 
             attempt += 1
 
     # ======================================================
-    # ESPERA ROBUSTA DEL CÁLCULO DE EXCEL
+    # ESPERAR A QUE EXCEL TERMINE EL CÁLCULO
     # ======================================================
     def _wait_for_refresh(self, excel_app, timeout=120):
-        """
-        Espera a que Excel termine cualquier cálculo interno.
-        Soporta:
-        - Modo manual
-        - Estados desconocidos de COM
-        - Timeout para evitar loops infinitos
-        """
-
         self.logger.info("Esperando a que Excel termine el cálculo...")
 
-        start_time = time.time()
+        start = time.time()
 
         while True:
             try:
                 state = excel_app.CalculateState
-            except Exception:
-                # Si COM no reporta, asumimos que terminó
+            except:
+                # Si COM falla, asumimos que terminó
                 break
 
-            # 0 = xlDone → terminó
+            # 0 = xlDone
             if state == 0:
                 break
 
-            # 1 = xlCalculating → esperar
-            if state == 1:
-                time.sleep(0.5)
+            # 1 = xlCalculating (esperar)
+            time.sleep(0.5)
 
-            # Cualquier otro valor desconocido → esperar de forma segura
-            else:
-                time.sleep(0.5)
-
-            if time.time() - start_time > timeout:
-                self.logger.warning("Timeout esperando a que Excel termine el cálculo.")
+            if time.time() - start > timeout:
+                self.logger.warning("Timeout esperando fin de cálculo.")
                 break
 
     # ======================================================
-    # VALIDACIÓN POST-REFRESH
+    # VALIDACIÓN POST REFRESH
     # ======================================================
     def _validate_excel_after_refresh(self, path):
-        file_size = os.path.getsize(path)
+        size = os.path.getsize(path)
 
-        if file_size <= 0:
+        if size <= 0:
             raise ExcelGatewayError("El archivo quedó vacío después del refresh.")
 
-        self.logger.info(f"Validación OK: archivo final tiene {file_size} bytes.")
+        self.logger.info(f"Validación OK: archivo final tiene {size} bytes.")

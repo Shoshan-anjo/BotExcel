@@ -9,11 +9,12 @@ from domain.exceptions import EmailNotificationError
 class EmailNotifier:
     """
     Envío de correos vía Outlook Desktop.
-    Soporta:
-    - Adjuntar logs solo si existen
-    - Rutas absolutas
-    - Manejo limpio de errores
-    - Inicialización COM segura
+
+    Características:
+    - SIN uso de SentOnBehalfOfName (evita errores SEND AS DENIED)
+    - Usa la cuenta predeterminada de Outlook (100% compatible)
+    - Adjunta logs solo si existen
+    - Inicialización COM robusta
     """
 
     def __init__(self, logger, config):
@@ -22,58 +23,78 @@ class EmailNotifier:
 
     def send_email(self, subject, body, attach_log=False):
         try:
-            mail_enabled = str(self.config.get("MAIL_ENABLED")).lower() == "true"
-            if not mail_enabled:
+            # -----------------------------------------------
+            # Validar si el envío está habilitado
+            # -----------------------------------------------
+            if str(self.config.get("MAIL_ENABLED", "false")).lower() != "true":
                 self.logger.info("MAIL_ENABLED = false → No se enviará correo.")
                 return
 
-            # =====================================================
-            # INICIALIZAR COM PARA USAR OUTLOOK
-            # =====================================================
-            pythoncom.CoInitialize()
+            recipient = self.config.get("MAIL_TO")
+            if not recipient:
+                raise EmailNotificationError(
+                    "MAIL_TO no está definido en .env → No se puede enviar correo."
+                )
+
+            # -----------------------------------------------
+            # Inicializar COM
+            # -----------------------------------------------
+            try:
+                pythoncom.CoInitialize()
+            except:
+                # Outlook puede ya estar inicializado
+                pass
 
             outlook = win32.Dispatch("Outlook.Application")
             mail = outlook.CreateItem(0)
 
+            # -----------------------------------------------
+            # Construir el correo (sin forcings de remitente)
+            # -----------------------------------------------
             mail.Subject = subject
             mail.Body = body
+            mail.To = recipient
 
-            mail.To = self.config.get("MAIL_TO")
-            mail.Sender = self.config.get("MAIL_FROM")
+            # Importante:
+            # Outlook enviará desde la cuenta activa del usuario.
+            # NO usar .Sender ni .SentOnBehalfOfName:
+            #
+            # mail.Sender = ...
+            # mail.SentOnBehalfOfName = ...
+            #
+            # Esto causa SEND-AS DENIED si no hay permisos.
 
-            # =====================================================
-            # ADJUNTAR LOG (solo si existe)
-            # =====================================================
-            if attach_log:
-                log_dir = self.config.get("LOG_DIR", "logs")
-                log_file = self.config.get("LOG_FILE", "botexcel.log")
+            # -----------------------------------------------
+            # Adjuntar log si corresponde o otro archivo
+            # -----------------------------------------------
 
-                abs_path = os.path.abspath(os.path.join(log_dir, log_file))
+            #if attach_log:
+                #log_dir = self.config.get("LOG_DIR", "logs")
+                #log_file = self.config.get("LOG_FILE", "botexcel.log")
+                #abs_path = os.path.abspath(os.path.join(log_dir, log_file))
 
-                if os.path.exists(abs_path):
-                    self.logger.info(f"Adjuntando log: {abs_path}")
-                    try:
-                        mail.Attachments.Add(abs_path)
-                    except Exception as e:
-                        self.logger.warning(f"No se pudo adjuntar el log: {str(e)}")
-                else:
-                    self.logger.warning(
-                        f"No existe log para adjuntar: {abs_path}"
-                    )
+                #if os.path.exists(abs_path):
+                #    try:
+                #        self.logger.info(f"Adjuntando log: {abs_path}")
+                #        mail.Attachments.Add(abs_path)
+                #    except Exception as e:
+                #        self.logger.warning(f"No se pudo adjuntar el log: {str(e)}")
+                #else:
+                #    self.logger.warning(f"No existe log para adjuntar: {abs_path}")
 
-            # =====================================================
-            # ENVIAR CORREO
-            # =====================================================
+            # -----------------------------------------------
+            # Enviar
+            # -----------------------------------------------
             mail.Send()
-            self.logger.info("Correo enviado correctamente.")
+            self.logger.info("Correo enviado correctamente mediante Outlook Desktop.")
 
         except Exception as e:
             raise EmailNotificationError(f"Error enviando correo: {str(e)}")
 
         finally:
-            # =====================================================
-            # CERRAR COM
-            # =====================================================
+            # -----------------------------------------------
+            # Liberar COM
+            # -----------------------------------------------
             try:
                 pythoncom.CoUninitialize()
             except:

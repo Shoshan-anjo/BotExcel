@@ -1,20 +1,21 @@
 # domain/exceptions.py
 
-class RefreshJobError(Exception):
-    """Error relacionado con la lógica del refresh en el dominio."""
-    pass
-
 
 class ConfigError(Exception):
-    """Errores relacionados a la configuración del sistema o .env."""
+    """Errores relacionados con configuración (.env, rutas, etc.)."""
     pass
 
 
 class ExcelGatewayError(Exception):
-    """Errores ocurridos durante la automatización de Excel."""
+    """Errores producidos al interactuar con Excel via COM."""
     pass
 
 
 class EmailNotificationError(Exception):
-    """Errores al enviar correos o usar Outlook."""
+    """Errores al enviar notificaciones por correo."""
+    pass
+
+
+class RefreshJobError(Exception):
+    """Errores de alto nivel al ejecutar un trabajo de refresh."""
     pass
