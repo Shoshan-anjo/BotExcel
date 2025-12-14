@@ -1,9 +1,6 @@
-# infrastructure/email_notifier.py
-
 import pythoncom
 import win32com.client as win32
 import os
-from domain.exceptions import EmailNotificationError
 
 class EmailNotifier:
     def __init__(self, logger, config):
@@ -11,59 +8,63 @@ class EmailNotifier:
         self.config = config
 
     def send_email(self, subject, body, attachments=None):
-        if not self.config.get_bool("MAIL_ENABLED", True):
-            self.logger.info("MAIL_ENABLED=false → No se enviará correo.")
-            return
-
-        to_addr = self.config.get("MAIL_TO")
-        from_addr = self.config.get("MAIL_FROM")
-        attach_logs = self.config.get_bool("ATTACH_LOG_ON_ERROR", False)
-
-        if attachments is None:
-            attachments = []
-
-        # Adjuntar logs si está activado
-        if attach_logs:
-            log_dir = self.config.get("LOG_DIR", "logs")
-            log_file = self.config.get("LOG_FILE", "botexcel.log")
-            log_path = os.path.join(log_dir, log_file)
-            log_path = os.path.abspath(log_path)
-
-            if os.path.exists(log_path):
-                attachments.append(log_path)
-            else:
-                # crear archivo vacío si no existe
-                os.makedirs(log_dir, exist_ok=True)
-                open(log_path, 'a').close()
-                attachments.append(log_path)
-
-        # Convertir todas las rutas a absolutas
-        attachments = [os.path.abspath(a) for a in attachments if os.path.exists(a)]
-
         try:
+            if not self.config.get_bool("MAIL_ENABLED", False):
+                self.logger.info("MAIL_ENABLED=false → correo deshabilitado.")
+                return
+
+            to_addr = self.config.get("MAIL_TO")
+            from_addr = self.config.get("MAIL_FROM")
+            attach_logs = self.config.get_bool("ATTACH_LOG_ON_ERROR", False)
+
+            if not to_addr:
+                self.logger.warning("MAIL_TO vacío → no se enviará correo.")
+                return
+
+            # Preparar adjuntos
+            final_attachments = []
+
+            if attachments:
+                final_attachments.extend(attachments)
+
+            if attach_logs:
+                log_dir = self.config.get("LOG_DIR", "logs")
+                log_file = self.config.get("LOG_FILE", "botexcel.log")
+                log_path = os.path.abspath(os.path.join(log_dir, log_file))
+
+                if os.path.exists(log_path):
+                    final_attachments.append(log_path)
+                else:
+                    self.logger.warning(f"No existe el log para adjuntar: {log_path}")
+
             pythoncom.CoInitialize()
+
             outlook = win32.Dispatch("Outlook.Application")
             mail = outlook.CreateItem(0)
+
             mail.Subject = subject
             mail.Body = body
             mail.To = to_addr
+
             if from_addr:
                 mail.SentOnBehalfOfName = from_addr
 
-            # Adjuntar archivos existentes
-            for path in attachments:
-                if os.path.exists(path):
+            for path in final_attachments:
+                try:
                     mail.Attachments.Add(path)
                     self.logger.info(f"Adjuntando archivo: {path}")
-                else:
-                    self.logger.warning(f"No se pudo adjuntar {path}: archivo no existe.")
+                except Exception as e:
+                    self.logger.warning(f"No se pudo adjuntar {path}: {e}")
 
             mail.Send()
             self.logger.info("Correo enviado correctamente.")
 
         except Exception as e:
-            self.logger.error(f"Error enviando correo: {str(e)}")
-            raise EmailNotificationError(f"Error enviando correo: {str(e)}")
+            # ⚠️ NUNCA ROMPER EL BOT
+            self.logger.warning(f"Fallo al enviar correo (ignorado): {e}")
 
         finally:
-            pythoncom.CoUninitialize()
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass

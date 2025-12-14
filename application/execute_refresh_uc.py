@@ -8,7 +8,7 @@ from infrastructure.logger_service import LoggerService
 from infrastructure.email_notifier import EmailNotifier
 from infrastructure.excel_gateway import ExcelGateway
 
-def execute_refresh():
+def execute_refresh(files=None):
     config = ConfigLoader()
     logger = LoggerService(config.get_log_level()).get_logger()
     notifier = EmailNotifier(logger, config)
@@ -18,7 +18,7 @@ def execute_refresh():
 
     logger.info("=== INICIO BotExcel MULTI-ARCHIVO + MULTI-BACKUP ===")
 
-    principals = config.get_excel_paths()
+    principals = files if files else config.get_excel_paths()
     backups = config.get_excel_backup_paths()
 
     if backups and len(principals) != len(backups):

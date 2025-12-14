@@ -1,14 +1,4 @@
-# ---------------- Básicos ----------------
-python-dotenv          # Para leer .env
-pytz                   # Manejo de zonas horarias
-pywin32                # Para controlar Excel y Outlook vía COM
-
-# ---------------- GUI --------------------
-tk                     # Tkinter ya viene con Python, no requiere pip
-# Si decides PyQt6 más adelante:
-# PyQt6
-
-# ---------------- Extras -----------------
-# (Opcional para logs o mejoras futuras)
-watchdog               # Para monitorear cambios en archivos
-schedule               # Si quieres manejar horarios desde Python en vez de Task Scheduler
+python-dotenv
+pytz
+pywin32
+tkinterdnd2

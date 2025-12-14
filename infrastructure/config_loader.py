@@ -2,18 +2,13 @@
 
 import os
 from dotenv import load_dotenv
-from domain.exceptions import ConfigError
 
 class ConfigLoader:
     """
     Carga variables desde .env y permite obtenerlas con config.get("KEY")
     """
-
     def __init__(self, env_path=".env", logger=None):
         self.logger = logger
-        if not os.path.exists(env_path):
-            raise ConfigError(f"No se encontró el archivo .env en: {env_path}")
-
         load_dotenv(env_path)
         self.config = os.environ
 
@@ -39,27 +34,24 @@ class ConfigLoader:
             return []
         return [x.strip() for x in value.split(separator) if x.strip()]
 
-    # Métodos específicos
-    def get_excel_paths(self):
-        paths = self.get_list("EXCEL_PATHS")
-        if not paths:
-            raise ConfigError("No se definió EXCEL_PATHS en el archivo .env")
-        return paths
+    def set(self, key, value):
+        """Actualiza la variable en memoria y en el .env"""
+        self.config[key] = str(value)
+        env_path = ".env"
+        lines = []
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        found = False
+        for i, line in enumerate(lines):
+            if line.strip().startswith(f"{key}="):
+                lines[i] = f"{key}={value}\n"
+                found = True
+                break
+        if not found:
+            lines.append(f"{key}={value}\n")
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
 
-    def get_excel_backup_paths(self):
-        return self.get_list("EXCEL_BACKUP_PATHS")
-
-    def is_mail_enabled(self):
-        return self.get_bool("MAIL_ENABLED")
-
-    def get_mail_from(self):
-        return self.get("MAIL_FROM")
-
-    def get_mail_to(self):
-        return self.get("MAIL_TO")
-
-    def use_outlook_desktop(self):
-        return self.get_bool("USE_OUTLOOK_DESKTOP")
-
-    def get_log_level(self):
-        return self.get("LOG_LEVEL", "INFO")
+# Esto asegura que ConfigLoader se pueda importar directamente
+__all__ = ["ConfigLoader"]

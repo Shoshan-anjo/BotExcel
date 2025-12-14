@@ -1,17 +1,17 @@
-# infrastructure/logger_service.py
-
 import os
 import logging
 from logging.handlers import TimedRotatingFileHandler
 
+
 class LoggerService:
     """
-    Inicializa un logger global con rotación diaria.
-    Además imprime en consola para seguimiento en tiempo real.
+    Inicializa un logger global con:
+    - Logs en archivo (rotación diaria)
+    - Logs en consola
     """
 
     def __init__(self, log_level="INFO", log_dir="logs", log_name="botexcel.log"):
-        self.log_level = log_level
+        self.log_level = log_level.upper()
         self.log_dir = log_dir
         self.log_name = log_name
 
@@ -21,23 +21,33 @@ class LoggerService:
 
         self.logger = logging.getLogger("BotExcelLogger")
         self.logger.setLevel(self.log_level)
+        self.logger.propagate = False  # 🔴 IMPORTANTE: evitar duplicados
 
-        # Evitar loggers duplicados
+        # Evitar handlers duplicados
         if not self.logger.handlers:
 
+            formatter = logging.Formatter(
+                "%(levelname)s - %(message)s"
+            )
+
+            # ============================
+            # 📄 HANDLER ARCHIVO
+            # ============================
             file_path = os.path.join(self.log_dir, self.log_name)
 
-            # 1️⃣ Handler de archivo con rotación
             file_handler = TimedRotatingFileHandler(
-                file_path, when="midnight", interval=1, backupCount=7, encoding="utf-8"
-            )
-            formatter = logging.Formatter(
-                "%(asctime)s - %(levelname)s - %(message)s"
+                file_path,
+                when="midnight",
+                interval=1,
+                backupCount=7,
+                encoding="utf-8"
             )
             file_handler.setFormatter(formatter)
             self.logger.addHandler(file_handler)
 
-            # 2️⃣ Handler de consola
+            # ============================
+            # 🖥️ HANDLER CONSOLA
+            # ============================
             console_handler = logging.StreamHandler()
             console_handler.setFormatter(formatter)
             self.logger.addHandler(console_handler)
