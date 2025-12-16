@@ -1,7 +1,8 @@
-python-dotenv
-pytz
-pywin32
-tkinterdnd2
-PyQt5
-PyQt-Fluent-Widgets
-
+# requirements.txt actualizado
+darkdetect==0.8.0
+python-dotenv==1.2.1
+pytz==2025.2
+PyQt5>=5.15.9
+PyQt-Fluent-Widgets>=1.4.3  # ← NOMBRE CORRECTO
+PyQt5-Frameless-Window>=0.7.4
+tkinterdnd2==0.4.3
