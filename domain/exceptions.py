@@ -11,3 +11,6 @@ class ExcelGatewayError(Exception):
 
 class EmailNotificationError(Exception):
     pass
+
+class EmailConfigError(Exception):
+    pass

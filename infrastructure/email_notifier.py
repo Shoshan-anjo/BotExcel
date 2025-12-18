@@ -1,6 +1,9 @@
+# infrastructure/email_notifier.py
+import os
+import smtplib
+from email.message import EmailMessage
 import pythoncom
 import win32com.client as win32
-import os
 
 class EmailNotifier:
     def __init__(self, logger, config):
@@ -8,63 +11,92 @@ class EmailNotifier:
         self.config = config
 
     def send_email(self, subject, body, attachments=None):
-        try:
-            if not self.config.get_bool("MAIL_ENABLED", False):
-                self.logger.info("MAIL_ENABLED=false → correo deshabilitado.")
-                return
+        mail_enabled = self.config.get_bool("MAIL_ENABLED", False)
+        use_outlook = self.config.get_bool("USE_OUTLOOK_DESKTOP", True)
 
-            to_addr = self.config.get("MAIL_TO")
-            from_addr = self.config.get("MAIL_FROM")
-            attach_logs = self.config.get_bool("ATTACH_LOG_ON_ERROR", False)
+        if not mail_enabled:
+            self.logger.info("MAIL_ENABLED=false → correo deshabilitado.")
+            return
 
-            if not to_addr:
-                self.logger.warning("MAIL_TO vacío → no se enviará correo.")
-                return
+        to_addrs = [addr.strip() for addr in self.config.get("MAIL_TO", "").split(",") if addr.strip()]
+        from_addr = self.config.get("MAIL_FROM")
+        attach_logs = self.config.get_bool("ATTACH_LOG_ON_ERROR", False)
+        send_attachment = self.config.get_bool("MAIL_SEND_ATTACHMENT", True)
 
-            # Preparar adjuntos
-            final_attachments = []
+        if not to_addrs:
+            self.logger.warning("MAIL_TO vacío → no se enviará correo.")
+            return
 
-            if attachments:
-                final_attachments.extend(attachments)
+        # Preparar adjuntos
+        final_attachments = attachments or []
+        if send_attachment and attach_logs:
+            log_dir = self.config.get("LOG_DIR", "logs")
+            log_file = self.config.get("LOG_FILE", "botexcel.log")
+            log_path = os.path.abspath(os.path.join(log_dir, log_file))
+            if os.path.exists(log_path):
+                final_attachments.append(log_path)
+            else:
+                self.logger.warning(f"No existe el log para adjuntar: {log_path}")
 
-            if attach_logs:
-                log_dir = self.config.get("LOG_DIR", "logs")
-                log_file = self.config.get("LOG_FILE", "botexcel.log")
-                log_path = os.path.abspath(os.path.join(log_dir, log_file))
+        if use_outlook:
+            # Enviar usando Outlook Desktop
+            try:
+                pythoncom.CoInitialize()
+                outlook = win32.Dispatch("Outlook.Application")
+                mail = outlook.CreateItem(0)
+                mail.Subject = subject
+                mail.Body = body
+                mail.To = ";".join(to_addrs)
+                if from_addr:
+                    mail.SentOnBehalfOfName = from_addr
 
-                if os.path.exists(log_path):
-                    final_attachments.append(log_path)
-                else:
-                    self.logger.warning(f"No existe el log para adjuntar: {log_path}")
+                for path in final_attachments:
+                    try:
+                        mail.Attachments.Add(path)
+                        self.logger.info(f"Adjuntando archivo: {path}")
+                    except Exception as e:
+                        self.logger.warning(f"No se pudo adjuntar {path}: {e}")
 
-            pythoncom.CoInitialize()
+                mail.Send()
+                self.logger.info("Correo enviado correctamente vía Outlook Desktop.")
+            except Exception as e:
+                self.logger.warning(f"Fallo al enviar correo vía Outlook Desktop: {e}")
+            finally:
+                try:
+                    pythoncom.CoUninitialize()
+                except Exception:
+                    pass
+        else:
+            # Enviar usando SMTP
+            smtp_server = self.config.get("MAIL_SMTP_SERVER")
+            smtp_port = int(self.config.get("MAIL_SMTP_PORT", 587))
+            username = self.config.get("MAIL_FROM")
+            password = self.config.get("MAIL_PASSWORD")
+            use_tls = self.config.get_bool("MAIL_USE_TLS", True)
 
-            outlook = win32.Dispatch("Outlook.Application")
-            mail = outlook.CreateItem(0)
-
-            mail.Subject = subject
-            mail.Body = body
-            mail.To = to_addr
-
-            if from_addr:
-                mail.SentOnBehalfOfName = from_addr
+            msg = EmailMessage()
+            msg["Subject"] = subject
+            msg["From"] = from_addr
+            msg["To"] = ", ".join(to_addrs)
+            msg.set_content(body)
 
             for path in final_attachments:
                 try:
-                    mail.Attachments.Add(path)
+                    with open(path, "rb") as f:
+                        data = f.read()
+                        filename = os.path.basename(path)
+                        msg.add_attachment(data, maintype="application", subtype="octet-stream", filename=filename)
                     self.logger.info(f"Adjuntando archivo: {path}")
                 except Exception as e:
                     self.logger.warning(f"No se pudo adjuntar {path}: {e}")
 
-            mail.Send()
-            self.logger.info("Correo enviado correctamente.")
-
-        except Exception as e:
-            # ⚠️ NUNCA ROMPER EL BOT
-            self.logger.warning(f"Fallo al enviar correo (ignorado): {e}")
-
-        finally:
             try:
-                pythoncom.CoUninitialize()
-            except Exception:
-                pass
+                server = smtplib.SMTP(smtp_server, smtp_port)
+                if use_tls:
+                    server.starttls()
+                server.login(username, password)
+                server.send_message(msg)
+                server.quit()
+                self.logger.info("Correo enviado correctamente vía SMTP.")
+            except Exception as e:
+                self.logger.warning(f"Error enviando correo vía SMTP: {e}")

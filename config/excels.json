@@ -2,14 +2,8 @@
     "excels": [
         {
             "path": "C:/Users/Shohan/Documents/ExcelPrueba.xlsx",
-            "backup": "",
-            "horario": "",
-            "activo": true
-        },
-        {
-            "path": "C:/Users/Shohan/Documents/ExcelPrueba.xlsx",
-            "backup": "",
-            "horario": "",
+            "backup": "C:/Users/Shohan/Documents/ExcelPrueba.xlsx",
+            "horario": "12:00",
             "activo": true
         }
     ]
