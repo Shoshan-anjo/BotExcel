@@ -16,8 +16,11 @@ def main():
             execute_fn=execute_refresh
         )
         scheduler.start()
-    else:
+    elif "--refresh" in sys.argv:
         execute_refresh()
+    else:
+        from gui.app import run
+        run()
 
 if __name__ == "__main__":
     main()

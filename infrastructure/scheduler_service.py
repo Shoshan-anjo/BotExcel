@@ -53,7 +53,7 @@ class SchedulerService:
             file_name = os.path.basename(excel_path)
             
             if self.status_callback:
-                self.status_callback("Actualizando Excel", f"Iniciando: {file_name}")
+                self.status_callback("Actualizando Excel", f"Iniciando: {file_name}. Evite abrir el archivo ahora.")
 
             try:
                 # Pass the specific file to only refresh this one

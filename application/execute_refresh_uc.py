@@ -10,21 +10,22 @@ from infrastructure.excel_gateway import ExcelGateway
 
 def execute_refresh(files=None):
     config = ConfigLoader()
-    logger = LoggerService(config.get_log_level()).get_logger()
+    logger = LoggerService(config.get("LOG_LEVEL", "INFO")).get_logger()
     notifier = EmailNotifier(logger, config)
 
     tz = pytz.timezone(config.get("TIMEZONE", "UTC"))
     t_start_global = datetime.now(tz)
 
-    logger.info("=== INICIO BotExcel MULTI-ARCHIVO + MULTI-BACKUP ===")
+    from application.scheduler_uc import SchedulerUseCase
+    scheduler_uc = SchedulerUseCase()
+    all_jobs = scheduler_uc._load_jobs()
+    
+    # Solo los activos si no se especifican archivos
+    principals = files if files else [j["path"] for j in all_jobs if j.get("activo", True)]
+    backups = [j.get("backup", "") for j in all_jobs if j.get("activo", True)] if not files else []
 
-    principals = files if files else config.get_excel_paths()
-    backups = config.get_excel_backup_paths()
-
-    if backups and len(principals) != len(backups):
-        error_msg = f"La cantidad de EXCEL_PATHS ({len(principals)}) NO coincide con EXCEL_BACKUP_PATHS ({len(backups)})."
-        logger.error(error_msg)
-        notifier.send_email("BotExcel - ERROR en configuración", error_msg)
+    if not principals:
+        logger.info("No hay archivos activos para actualizar.")
         return
 
     resultados = []
@@ -95,5 +96,13 @@ def execute_refresh(files=None):
             resumen += f"❌ {r['archivo']}\n   FALLÓ\n   Detalle: {r['error']}\n   Fallback usado: {r['fallback']}\n\n"
 
     resumen += f"Tiempo total del bot: {total_global} segundos\nInicio: {t_start_global}\nFin: {t_end_global}\n"
-    notifier.send_email("BotExcel - Resumen Multi-Archivo + Multi-Backup", resumen)
-    logger.info("=== FIN BotExcel MULTI-ARCHIVO + MULTI-BACKUP ===")
+    
+    # Recolectar archivos exitosos para adjuntar (si está habilitado en config)
+    excel_attachments = []
+    if config.get_bool("MAIL_SEND_ATTACHMENT", True):
+        for r in resultados:
+            if r["estado"].startswith("OK"):
+                excel_attachments.append(r["archivo"])
+
+    notifier.send_email("Pivoty - Resumen Multi-Archivo + Multi-Backup", resumen, attachments=excel_attachments)
+    logger.info("=== FIN Pivoty MULTI-ARCHIVO + MULTI-BACKUP ===")

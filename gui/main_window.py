@@ -1,4 +1,6 @@
-from PyQt5.QtWidgets import QWidget, QSystemTrayIcon, QMenu, QAction
+from PyQt5.QtWidgets import QSystemTrayIcon, QMenu, QAction
+from PyQt5.QtGui import QIcon
+
 from qfluentwidgets import (
     FluentWindow,
     FluentIcon,
@@ -17,6 +19,8 @@ from gui.mail_settings_view import MailSettingsView
 from infrastructure.scheduler_service import SchedulerService
 from infrastructure.logger_service import LoggerService
 from application.execute_refresh_uc import execute_refresh
+from core.utils import resource_path
+
 
 
 class MainWindow(FluentWindow):
@@ -39,8 +43,11 @@ class MainWindow(FluentWindow):
         # -------------------------
         # Configuración de ventana
         # -------------------------
-        self.setWindowTitle("BotExcel")
+        self.setWindowTitle("Pivoty")
+        self.setWindowIcon(QIcon(resource_path("LogoIconoDino.ico")))
         self.resize(1200, 750)
+
+
 
         # -------------------------
         # Vistas principales
@@ -102,9 +109,11 @@ class MainWindow(FluentWindow):
 
     def _init_tray(self):
         self.tray_icon = QSystemTrayIcon(self)
-        # Usamos un icono de la librería Fluent
-        self.tray_icon.setIcon(FluentIcon.DOCUMENT.icon())
-        self.tray_icon.setToolTip("BotExcel - Automatización Activa")
+        # Usamos el logo personalizado para el tray
+        self.tray_icon.setIcon(QIcon(resource_path("LogoIconoDino.ico")))
+        self.tray_icon.setToolTip("Pivoty - Automatización Activa")
+
+
 
         # Menú contextual del Tray
         tray_menu = QMenu()
@@ -141,7 +150,7 @@ class MainWindow(FluentWindow):
         if self.tray_icon.isVisible():
             self.hide()
             self.tray_icon.showMessage(
-                "BotExcel",
+                "Pivoty",
                 "El bot sigue funcionando en segundo plano.",
                 QSystemTrayIcon.Information,
                 3000

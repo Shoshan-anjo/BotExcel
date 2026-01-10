@@ -72,8 +72,17 @@ class ExcelGateway:
     def refresh_file(self, excel_path):
         self.logger.info(f"Iniciando refresh del archivo: {excel_path}")
 
-        if self.file_is_locked(excel_path):
-            raise ExcelGatewayError(f"El archivo está bloqueado: {excel_path}")
+        # --- MANEJO DE CONFLICTOS CON EL USUARIO ---
+        # Si el usuario tiene el archivo abierto, intentamos esperar un poco
+        max_lock_attempts = 5
+        for lock_attempt in range(1, max_lock_attempts + 1):
+            if not self.file_is_locked(excel_path):
+                break
+            if lock_attempt < max_lock_attempts:
+                self.logger.warning(f"Archivo en uso por el usuario. Reintento {lock_attempt} en 30s...")
+                time.sleep(30)
+            else:
+                raise ExcelGatewayError(f"El archivo sigue bloqueado después de {max_lock_attempts} intentos. Por favor, ciérrelo para que el bot pueda trabajar.")
 
         attempt = 1
         while attempt <= self.max_retries:
@@ -89,10 +98,24 @@ class ExcelGateway:
 
                 wb = excel.Workbooks.Open(excel_path)
 
+                # --- CONFIGURACIÓN PARA POWER QUERY PESADO ---
+                # Deshabilitamos el refresco en segundo plano de todas las conexiones
+                # Esto obliga a que wb.RefreshAll() sea sincrónico y espere de verdad.
+                try:
+                    for conn in wb.Connections:
+                        if conn.Type == 1: # OLEDB (Power Query)
+                            conn.OLEDBConnection.BackgroundQuery = False
+                        elif conn.Type == 2: # ODBC
+                            conn.ODBCConnection.BackgroundQuery = False
+                except Exception as e:
+                    self.logger.warning(f"No se pudieron ajustar todas las conexiones: {e}")
+
                 t_start = time.time()
                 self.logger.info("Ejecutando RefreshAll()...")
                 wb.RefreshAll()
-                self._wait_for_refresh(excel)
+                
+                # Aumentamos el timeout de espera a 2 horas (7200s) por seguridad
+                self._wait_for_refresh(excel, timeout=7200)
                 t_end = time.time()
 
                 wb.Save()

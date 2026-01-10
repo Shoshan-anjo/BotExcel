@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
 from PyQt5.QtGui import QFont, QIntValidator
 from qfluentwidgets import (
     LineEdit, SwitchButton, PushButton, InfoBar, 
@@ -33,16 +33,10 @@ class MailSettingsView(QWidget):
         header_mail = TitleLabel("Configuración de Notificaciones")
         main_layout.addWidget(header_mail)
 
-        subtitle_mail = SubtitleLabel("Define quién recibe los reportes y qué información se incluye.")
+        subtitle_mail = SubtitleLabel("Define quién recibe los reportes. Se usa Outlook automáticamente.")
         subtitle_mail.setTextColor("#808080", "#a0a0a0")
         main_layout.addWidget(subtitle_mail)
         main_layout.addSpacing(5)
-
-        # Correo remitente
-        self.sender_input = LineEdit()
-        self.sender_input.setPlaceholderText("Correo remitente (Outlook)")
-        self.sender_input.setText(self.env.get("MAIL_FROM", ""))
-        main_layout.addWidget(self.sender_input)
 
         # Destinatarios
         self.recipients_input = LineEdit()
@@ -180,9 +174,6 @@ class MailSettingsView(QWidget):
         main_layout.addStretch()
 
     # -------------------------
-    # Guardar configuración
-    # -------------------------
-    # -------------------------
     # Métodos Auxiliares
     # -------------------------
     def check_outlook_status(self):
@@ -197,10 +188,10 @@ class MailSettingsView(QWidget):
             try:
                 import win32com.client
                 win32com.client.Dispatch("Outlook.Application")
-                self.status_label.setText("Estado de Outlook: Disponible (Cerrado) 🆗")
+                self.status_label.setText("Estado de Outlook: Disponible (Bot Enviará ok) 🆗")
                 self.status_label.setTextColor("#3498db", "#3498db")
             except:
-                self.status_label.setText("Estado de Outlook: No detectado ❌")
+                self.status_label.setText("Estado de Outlook: No detectado o configurado ❌")
                 self.status_label.setTextColor("#e74c3c", "#e74c3c")
 
     def send_test_email(self):
@@ -218,9 +209,9 @@ class MailSettingsView(QWidget):
             notifier = EmailNotifier(logger, config)
             
             notifier.send_email(
-                "BotExcel - Prueba de Notificación",
-                "Este es un correo de prueba enviado desde la configuración de BotExcel.\n"
-                "Si recibes esto, el envío vía Outlook está funcionando correctamente."
+                "Pivoty - Prueba de Notificación",
+                "Este es un correo de prueba enviado desde la configuración de Pivoty.\n"
+                "Para que el envío funcione 24/7 sin ventanas abiertas, asegúrate de tener una cuenta de Outlook configurada en este equipo."
             )
             
             InfoBar.success(
@@ -243,9 +234,9 @@ class MailSettingsView(QWidget):
     def save_settings(self, silent=False):
         env = dict(self.env)
 
-        env["MAIL_FROM"] = self.sender_input.text()
         env["MAIL_TO"] = self.recipients_input.text()
         env["MAIL_ENABLED"] = str(self.enable_mail.isChecked()).lower()
+        env["USE_OUTLOOK_DESKTOP"] = "true" # Siempre usar Outlook para simplicidad
         env["MAIL_SEND_ATTACHMENT"] = str(self.send_attachment.isChecked()).lower()
         env["MAIL_INCLUDE_SCREENSHOTS"] = str(self.include_screenshots.isChecked()).lower()
         env["MAIL_INCLUDE_LOG_SNIPPET"] = str(self.include_logs.isChecked()).lower()

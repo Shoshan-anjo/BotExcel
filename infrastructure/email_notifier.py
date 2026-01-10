@@ -64,7 +64,7 @@ class EmailNotifier:
                 except:
                     pass
 
-        if send_attachment and attach_logs:
+        if attach_logs and ("ERROR" in subject.upper() or "FALLÓ" in body.upper()):
             log_dir = self.config.get("LOG_DIR", "logs")
             log_file = self.config.get("LOG_FILE", "botexcel.log")
             log_path = os.path.abspath(os.path.join(log_dir, log_file))
