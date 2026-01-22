@@ -7,6 +7,7 @@ Output/
 # Entorno virtual
 venv/
 .env
+access_keys.md
 
 # PyInstaller y Build
 dist/
